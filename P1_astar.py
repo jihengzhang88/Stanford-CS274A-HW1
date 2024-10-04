@@ -41,6 +41,7 @@ class AStar(object):
         """
         ########## Code starts here ##########
         raise NotImplementedError("is_free not implemented")
+        ## test here
         ########## Code ends here ##########
 
     def distance(self, x1, x2):
