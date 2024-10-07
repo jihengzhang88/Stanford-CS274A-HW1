@@ -106,8 +106,46 @@ class RRT(object):
         #   - the order in which you pass in arguments to steer_towards and is_free_motion is important
 
         ########## Code starts here ##########
+        for i in range(max_iters):
+            # Step 1: Sample a random point in the state space
+            if np.random.rand() < goal_bias:
+                x_rand = self.x_goal
+            else:
+                x_rand = np.random.uniform(self.statespace_lo, self.statespace_hi)
 
-        ########## Code ends here ##########
+            # Step 2: Find nearest node in the tree
+            nearest_idx = self.find_nearest(V[:n, :], x_rand)
+            x_nearest = V[nearest_idx, :]
+
+            # Step 3: Steer from x_nearest towards x_rand
+            x_new = self.steer_towards(x_nearest, x_rand, eps)
+
+            # Step 4: Check if motion from x_nearest to x_new is free
+            if self.is_free_motion(self.obstacles, x_nearest, x_new):
+                # Step 5: Add the new node to the tree
+                V[n, :] = x_new
+                P[n] = nearest_idx
+                n += 1
+
+                # Step 6: Check if the new node is close to the goal
+                if np.linalg.norm(x_new - self.x_goal) < eps:
+                    success = True
+                    break
+        
+        if success:
+            # Reconstruct the path from x_goal back to x_init
+            self.path = [self.x_goal]
+            current_idx = n - 1
+            while current_idx != 0:
+                self.path.append(V[current_idx])
+                current_idx = P[current_idx]
+            self.path.append(self.x_init)
+            self.path.reverse()  # Reverse the path to go from x_init to x_goal
+
+            # Apply shortcutting if enabled
+            if shortcut:
+                self.shortcut_path()
+            ########## Code ends here ##########
 
         plt.figure()
         self.plot_problem()
@@ -144,7 +182,29 @@ class RRT(object):
             None, but should modify self.path
         """
         ########## Code starts here ##########
+        if self.path is None or len(self.path) < 3:
+            # No shortcutting is possible if there are fewer than 3 nodes (x_init, intermediate nodes, x_goal)
+            return
 
+        success = False
+
+        while not success:
+            success = True  # Assume success until proven otherwise
+            # Iterate over the path, skipping the first and last nodes
+            i = 1
+            while i < len(self.path) - 1:
+                parent_node = self.path[i - 1]  # PARENT(x)
+                current_node = self.path[i]     # x
+                child_node = self.path[i + 1]   # CHILD(x)
+
+                # Check if we can connect the parent and the child directly
+                if self.is_free_motion(self.obstacles, parent_node, child_node):
+                    # Remove the current node since it's unnecessary
+                    self.path.pop(i)
+                    success = False  # Need to continue since we modified the path
+                else:
+                    # Move to the next node
+                    i += 1
         ########## Code ends here ##########
 
 class GeometricRRT(RRT):
@@ -157,17 +217,28 @@ class GeometricRRT(RRT):
         # Consult function specification in parent (RRT) class.
         ########## Code starts here ##########
         # Hint: This should take 1-3 line.
-
+        # Compute Euclidean distance to all points in V
+        distances = np.linalg.norm(V[:len(V)] - x, axis=1)
+        # Return the index of the minimum distance
+        return np.argmin(distances)
         ########## Code ends here ##########
-        pass
 
     def steer_towards(self, x1, x2, eps):
         # Consult function specification in parent (RRT) class.
         ########## Code starts here ##########
         # Hint: This should take 1-4 line.
-
+        # Compute the distance between x1 and x2
+        dist = np.linalg.norm(x2 - x1)
+        
+        # If distance is less than eps, return x2
+        if dist <= eps:
+            return x2
+        
+        # Otherwise, return a point along the line at distance eps from x1
+        direction = (x2 - x1) / dist  # Unit vector from x1 to x2
+        return x1 + eps * direction
         ########## Code ends here ##########
-        pass
+
 
     def is_free_motion(self, obstacles, x1, x2):
         motion = np.array([x1, x2])
@@ -180,5 +251,8 @@ class GeometricRRT(RRT):
         plot_line_segments([(V[P[i],:], V[i,:]) for i in range(V.shape[0]) if P[i] >= 0], **kwargs)
 
     def plot_path(self, **kwargs):
+        if self.path is None or len(self.path) == 0:
+            print("No path found!")
+            return
         path = np.array(self.path)
         plt.plot(path[:,0], path[:,1], **kwargs)

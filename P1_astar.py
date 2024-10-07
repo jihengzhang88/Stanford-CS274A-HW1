@@ -40,8 +40,12 @@ class AStar(object):
               useful here
         """
         ########## Code starts here ##########
-        raise NotImplementedError("is_free not implemented")
         ## test here
+        if not (self.statespace_lo[0] <= x[0] <= self.statespace_hi[0] and
+                self.statespace_lo[1] <= x[1] <= self.statespace_hi[1]):
+            return False
+        return self.occupancy.is_free(x)
+        # raise NotImplementedError("is_free not implemented")
         ########## Code ends here ##########
 
     def distance(self, x1, x2):
@@ -56,7 +60,8 @@ class AStar(object):
         HINT: This should take one line. Tuples can be converted to numpy arrays using np.array().
         """
         ########## Code starts here ##########
-        raise NotImplementedError("distance not implemented")
+        return np.linalg.norm(np.array(x1) - np.array(x2))
+        # raise NotImplementedError("distance not implemented")
         ########## Code ends here ##########
 
     def snap_to_grid(self, x):
@@ -92,9 +97,22 @@ class AStar(object):
         """
         neighbors = []
         ########## Code starts here ##########
-        raise NotImplementedError("get_neighbors not implemented")
-        ########## Code ends here ##########
+        neighbor_offsets = [
+        (self.resolution, 0), (-self.resolution, 0),
+        (0, self.resolution), (0, -self.resolution),
+        (self.resolution, self.resolution), (-self.resolution, -self.resolution),
+        (self.resolution, -self.resolution), (-self.resolution, self.resolution)
+        ]
+
+        for offset in neighbor_offsets:
+            neighbor = (x[0] + offset[0], x[1] + offset[1])
+            snapped_neighbor = self.snap_to_grid(neighbor)
+            if self.is_free(snapped_neighbor):
+                neighbors.append(snapped_neighbor)
         return neighbors
+        # raise NotImplementedError("get_neighbors not implemented")
+        ########## Code ends here ##########
+       
 
     def find_best_est_cost_through(self):
         """
@@ -157,7 +175,40 @@ class AStar(object):
                 set membership efficiently using the syntax "if item in set".
         """
         ########## Code starts here ##########
-        raise NotImplementedError("solve not implemented")
+        while self.open_set:
+            # Find the node in open_set with the lowest estimated total cost (f score)
+            current = self.find_best_est_cost_through()
+        
+            # If we have reached the goal, reconstruct the path
+            if current == self.x_goal:
+                self.path = self.reconstruct_path()
+                return True
+        
+            # Move current node from open_set to closed_set
+            self.open_set.remove(current)
+            self.closed_set.add(current)
+        
+            # Iterate through neighbors of the current node
+            for neighbor in self.get_neighbors(current):
+                if neighbor in self.closed_set:
+                    continue  # Ignore neighbors that have already been visited
+                
+                # Compute the tentative cost to arrive at the neighbor
+                tentative_g_score = self.cost_to_arrive[current] + self.distance(current, neighbor)
+                
+                if neighbor not in self.open_set:
+                    self.open_set.add(neighbor)
+                elif tentative_g_score >= self.cost_to_arrive.get(neighbor, float('inf')):
+                    continue  # This is not a better path, skip it
+                
+                # This path is the best until now, record it
+                self.came_from[neighbor] = current
+                self.cost_to_arrive[neighbor] = tentative_g_score
+                self.est_cost_through[neighbor] = tentative_g_score + self.distance(neighbor, self.x_goal)
+    
+        # If the open_set is empty, no solution was found
+        return False
+        # raise NotImplementedError("solve not implemented")
         ########## Code ends here ##########
 
 class DetOccupancyGrid2D(object):
